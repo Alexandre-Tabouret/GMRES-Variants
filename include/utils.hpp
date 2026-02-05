@@ -25,7 +25,7 @@ template <class Vector> typename Vector::value_type norm(const Vector &v) {
 
 
 template<class MatrixCSR, class Vector>
-void original_spmv(const MatrixCSR& mat, const Vector& v, Vector& r) {
+void original_spmv(const MatrixCSR& mat, const double* v, Vector& r) {
 	std::size_t n = n_rows(mat);
 	const int* i_ptr = mat.get_i_ptr();
 	const int* j_ptr = mat.get_j_ptr();
@@ -36,7 +36,7 @@ void original_spmv(const MatrixCSR& mat, const Vector& v, Vector& r) {
             double sum = 0;
 
             for (int k = i_ptr[i]; k < i_ptr[i + 1]; ++k) {
-               	sum += v_ptr[k] * v(j_ptr[k]);
+               	sum += v_ptr[k] * v[j_ptr[k]];
             }
 
             r(i) = sum;

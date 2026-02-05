@@ -6,14 +6,17 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <random>
 
 #include "sgmres.hpp"
 #include "utils.hpp"
+#include "sketching.hpp"
+#include "preconditioner.hpp"
 #include <composyx.hpp>
 #include <composyx/linalg/MatrixNorm.hpp>
 
 void run_sGMRES(const std::string& matrix_path, double tol, int max_iter,
-		int restart_iter) {
+		int restart_iter, int k) {
 
     // If no restart, set restart_iter = max_iter
     if (restart_iter <= 0) {
@@ -40,22 +43,33 @@ void run_sGMRES(const std::string& matrix_path, double tol, int max_iter,
     double normb = norm(b);
     double normA = approximate_mat_norm(A);
 
-	// Hessenberg matrix H
-    composyx::DenseMatrix<double> H(max_iter + 1, max_iter);
+	// Preconditioenr
+    Precond_Jacobi<double, Vector, composyx::SparseMatrixCSR<double, int>> M(A);
 
 	// Basis V
-    composyx::DenseMatrix<double> V(n, restart_iter + 1);    
-    Vector* v = new Vector[restart_iter + 1];
-    for (int idx = 0; idx < restart_iter + 1; ++idx) {
-	v[idx] = V.get_vect_view(idx);
+    composyx::DenseMatrix<double> V(n, restart_iter + 1); 
+
+	// Sketch S, and QR factorization Q, R
+    int sketch_size = 2 * (restart_iter + 1);
+/*
+    composyx::DenseMatrix<double> S(sketch_size, n);
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_real_distribution<double> dist(-1.0, 1.0);
+    for (int i = 0; i < sketch_size; ++i) {
+    	for (int j = 0; j < n; ++j) {
+            S(i, j) = dist(gen);
+    	}
     }
+*/
+    SRHT<Vector> S(sketch_size, n);
+
+    composyx::DenseMatrix<double> Q(sketch_size, restart_iter + 1);
+    composyx::DenseMatrix<double> R(restart_iter + 1, restart_iter + 1);
     
-	// Sketch S
-    composyx::DenseMatrix<double> S(2 * (max_iter + 1), n);
-	
     // Run sGMRES
     auto start = std::chrono::high_resolution_clock::now();
-    int i = sGMRES(A, normA, x, b, normb, H, V, v, S, max_iter, restart_iter, tol);
+    int i = sGMRES(A, normA, x, b, normb, M, V, S, Q, R, max_iter, restart_iter, tol, k);
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> elapsed = end - start;
     
@@ -70,10 +84,6 @@ void run_sGMRES(const std::string& matrix_path, double tol, int max_iter,
     double backward_error = norm(b - A * x) / (normA * norm(x) + normb);
     std::cout << "||b - A * x|| / (||A||||x|| + ||b||): " << backward_error << std::endl;   
     std::cout << "Time for operation: " << elapsed.count() << " seconds\n";
-
-    // Terminate (free)
-    delete[] v;
-
 }
 
 
@@ -86,6 +96,7 @@ Options:
   -t, --tol <float>             	GMRES convergence tolerance [default: 1e-9]
   -i, --max_iter <int>          	Maximum number of GMRES iterations [default: 1500]
   -ri, --restart-iter <int>		Number of iterations between restarts, no restart if 0 [default: 0]
+  -k, 					k-truncated Arnoldi process parameter [default: 4]
   -h, --help                		Show this help message and exit
 )";
 }
@@ -98,6 +109,7 @@ int main(int argc, char* argv[]) {
     double tol = 1e-9;
     int max_iter = 1500;
     int restart_iter = 0;
+    int k = 4;
     
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
@@ -109,6 +121,8 @@ int main(int argc, char* argv[]) {
             max_iter = std::stoi(argv[++i]);
 	else if ((arg == "--restart_iter" || arg == "-ri") && i + 1 < argc)
             restart_iter = std::stoi(argv[++i]);
+	else if ((arg == "-k") && i + 1 < argc)
+            k = std::stoi(argv[++i]);
 	else if (arg == "--help" || arg == "-h") {
             print_help();
 	    return 0;
@@ -119,7 +133,7 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    run_sGMRES(matrix_path, tol, max_iter, restart_iter);
+    run_sGMRES(matrix_path, tol, max_iter, restart_iter, k);
 
     return 0;
 }

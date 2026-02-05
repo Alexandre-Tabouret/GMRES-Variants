@@ -14,29 +14,6 @@ using namespace utils;
 
 // ========== Utilitary Functions ========== //
 
-template <class Real>
-void GeneratePlaneRotation(Real& dx, Real& dy, Real& cs, Real& sn) {
-    if (dy == 0.0) {
-        cs = 1.0;
-        sn = 0.0;
-    } else if (abs(dy) > abs(dx)) {
-        Real temp = dx / dy;
-        sn = 1.0 / sqrt(1.0 + temp * temp);
-        cs = temp * sn;
-    } else {
-        Real temp = dy / dx;
-        cs = 1.0 / sqrt(1.0 + temp * temp);
-        sn = temp * cs;
-    }
-}
-
-template <class Real>
-void ApplyPlaneRotation(Real& dx, Real& dy, Real& cs, Real& sn) {
-    Real temp = cs * dx + sn * dy;
-    dy = -sn * dx + cs * dy;
-    dx = temp;
-}
-
 template <class Matrix, class Vector>
 void Update(Vector& x, int k, Matrix& h, const Vector& s, const Matrix &V) {
     Vector y(s);
@@ -48,6 +25,17 @@ void Update(Vector& x, int k, Matrix& h, const Vector& s, const Matrix &V) {
     
 }
 
+template<class Matrix, class Vector>
+void back_substitution(const Matrix& R, const Vector& b, Vector& y, int n) {
+    for (int i = n - 1; i >= 0; --i) {
+        double sum = b(i);
+        for (int j = i + 1; j < n; ++j)
+            sum -= R(i, j) * y(j);
+        y(i) = sum / R(i, i);
+    }
+}
+
+
 
 template <class Real>
 Real abs(Real x) {
@@ -57,21 +45,23 @@ Real abs(Real x) {
 
 // ========== sGMRES ========== //
 
-template<class Operator, class Vector, class Matrix, class Sketch>
-int sGMRES(Operator& A, double normA, Vector& x, Vector& b, double normb, Matrix& H, Matrix& V, Vector* v, Sketch S,
-	   int& max_iter, int& restart_iter, double& tol) {
+template<class Operator, class Vector, class Matrix, class Sketch, class Preconditioner>
+int sGMRES(Operator& A, double normA, Vector& x, Vector& b, double normb, Preconditioner& M, Matrix& V, 
+	   Sketch& S, Matrix& Q, Matrix& R,
+	   int& max_iter, int& restart_iter, double& tol, const int& k) {
 
     // Initialization
-    double resid;
+    double resid, h;
     int i, j = 1; // Iterators
     int n = n_rows(A);
-    Vector w(n), r(n);
+    int s = n_rows(S);
+    Vector w(n), r(n), w_s(s), Sr_0(s), y(restart_iter + 1), z(n), v(n), tx(n), QtSr_0(restart_iter + 1);
+    M.solve(x, tx);
 
-    original_spmv(A, x, r);
-    r = b - r;
+    r = b - A * tx;
     double beta = norm(r);
 
-    double backward_error = beta / (normA * norm(x) + normb);
+    double backward_error = beta / (normA * norm(tx) + normb);
     if (backward_error <= tol) {
 	tol = beta;
 	max_iter = 0;
@@ -80,9 +70,97 @@ int sGMRES(Operator& A, double normA, Vector& x, Vector& b, double normb, Matrix
 
     resid = beta;
 
+    // Outer loop
+    while (j <= max_iter) {
+	// Initialize V
+	cblas_dcopy(n, r.data(), 1, V.data(), 1);
+        cblas_dscal(n, 1.0 / beta, V.data(), 1);
+	
+	// Initialize g = S * r_0
+	S.sketch(r.data(), Sr_0);
+	double norm_Sr_0_squared = norm(Sr_0);
+	norm_Sr_0_squared *= norm_Sr_0_squared;
+
+	// Inner loop
+	for (i = 0; i < restart_iter && j <= max_iter; ++i, ++j) {
+
+	    // Apply Preconditioner
+	    cblas_dcopy(n, V.data() + n * i, 1, v.data(), 1);
+	    M.solve(v, z);
+
+	    // SpMV
+	    w = A * z;
+
+	    // Sketch the new vector
+	    S.sketch(w.data(), w_s);
+
+
+	    // k-truncated Arnoldi
+	    for (int iter = std::max(0, i - k); iter <= i; ++iter) {
+		h = cblas_ddot(n, w.data(), 1, V.data() + n * iter, 1);
+		cblas_daxpy(n, -h, V.data() + n * iter, 1, w.data(), 1);
+	    }
+	    h = norm(w);
+	    cblas_dcopy(n, w.data(), 1, V.data() + n * (i + 1), 1);
+	    cblas_dscal(n, 1.0 / h, V.data() + n * (i + 1), 1);
+
+	    // QR factorization update
+            for (int iter = 0; iter < i; ++iter) {
+                R(iter, i) = cblas_ddot(s, w_s.data(), 1, Q.data() + s * iter, 1);
+                cblas_daxpy(s, -R(iter, i), Q.data() + s * iter, 1, w_s.data(), 1);
+            }
+            R(i, i) = norm(w_s);
+            cblas_dcopy(s, w_s.data(), 1, Q.data() + s * (i), 1);
+            cblas_dscal(s, 1.0 / R(i, i), Q.data() + s * (i), 1);
+
+	    // Compute the estimated residual
+            QtSr_0(i) = cblas_ddot(s, Q.data() + s * (i), 1, Sr_0.data(), 1);
+            double norm_QtSr_0_squared = cblas_ddot(i, QtSr_0.data(), 1, QtSr_0.data(), 1);
+            double resid_estimate = std::sqrt(norm_Sr_0_squared - norm_QtSr_0_squared);
+
+	    // Update x for backward error
+            if (1) {
+                tx = x;
+                cblas_dcopy(i, QtSr_0.data(), 1, y.data(), 1);
+                cblas_dtrsm(CblasColMajor, CblasLeft, CblasUpper, CblasNoTrans, CblasNonUnit, i, 1, 1., R.data(), restart_iter + 1, y.data(), restart_iter + 1); 
+                cblas_dgemv(CblasColMajor, CblasNoTrans, n, i, 1.0, V.data(), n, y.data(), 1, 1.0, tx.data(), 1);
+                M.solve(tx, tx);
+                resid = norm(b - A * tx);
+            }
+
+	    backward_error = resid / (normA * norm(tx) + normb);
+
+std::cout << j << " " << i << " " << backward_error << " (" << resid << " / " << resid_estimate <<")" << std::endl;
+	    if (backward_error < tol) {
+		x = tx;
+		max_iter = j;
+		tol = resid;
+		return 0;
+	    }
+
+	} // End for i
+
+    	// Update before restart
+	cblas_dgemv(CblasColMajor, CblasNoTrans, n, i + 1, 1.0, V.data(), n, y.data(), 1, 1.0, x.data(), 1);
+	M.solve(x, tx);
+    	r = b - A * tx;
+    	beta = norm(r);
+    	resid = beta;
+    	backward_error = resid / (normA * norm(tx) + normb);
+    	if (backward_error < tol) {
+	    x = tx;
+	    tol = resid;
+            max_iter = j;
+            return 0;
+     	}
 
 
 
+    } // End while j
+
+    // No convergence
+    M.solve(x, x);
+    tol = resid;
     return 1;
 }
 
