@@ -9,11 +9,84 @@
 #include <random>
 
 #include "sgmres.hpp"
+#include "dqgmres.hpp"
 #include "utils.hpp"
 #include "sketching.hpp"
 #include "preconditioner.hpp"
 #include <composyx.hpp>
 #include <composyx/linalg/MatrixNorm.hpp>
+
+void run_DQGMRES(const std::string& matrix_path, double tol, int max_iter,
+		int restart_iter, int k) {
+
+    // If no restart, set restart_iter = max_iter
+    if (restart_iter <= 0) {
+	restart_iter = max_iter;
+    } 
+
+    // Set up nickname
+    typedef composyx::DenseMatrix<double, 1> Vector;
+
+
+    // Load matrix from mtx file
+    composyx::SparseMatrixCSR<double, int> A = utils::load_matrix<composyx::SparseMatrixCSR<double, int>>(matrix_path);
+
+    // Initialize all data
+
+	// Preconditioenr
+    Precond_Jacobi<double, Vector, composyx::SparseMatrixCSR<double, int>> M(A);
+    //Precond_Identity<double, Vector, composyx::SparseMatrixCSR<double, int>> M(A);
+
+
+    	// System vectors x_0, b
+/*
+    int n = n_rows(A);
+    Vector x(n), b(n);
+    for (int k = 0; k < n; ++k) {
+        x(k) = 0.;
+        b(k) = 1.0;
+    }
+    b = A * b;    
+*/
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::normal_distribution<double> dist(0.0, 1.0);
+    int n = n_rows(A);
+    Vector x(n), b(n), y(n);
+    for (int k = 0; k < n; ++k) {
+        y(k) = dist(gen);
+	x(k) = 0;
+    }
+    b = A * y;
+	
+    double normb = norm(b);
+    double normA = approximate_mat_norm(A);
+
+	// Basis V, P and H
+    composyx::DenseMatrix<double> V(n, restart_iter + 1); 
+    composyx::DenseMatrix<double> P(n, restart_iter + 1);
+    composyx::DenseMatrix<double> H(restart_iter + 1, restart_iter);
+
+    // Run sGMRES
+    auto start = std::chrono::high_resolution_clock::now();
+    int i = DQGMRES(A, normA, x, b, normb, M, V, H, P, max_iter, restart_iter, tol, k);
+    auto end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> elapsed = end - start;
+    
+
+    // Display results
+    if (i == 0) {
+	std::cout << "Converged in " << max_iter << " iterations\n";
+    } else {
+        std::cout << "Did not converge\n";
+    }
+
+    double backward_error = norm(b - A * x) / (normA * norm(x) + normb);
+    std::cout << "||b - A * x|| / (||A||||x|| + ||b||): " << backward_error << std::endl;   
+    std::cout << "Time for operation: " << elapsed.count() << " seconds\n";
+}
+
+
 
 void run_sGMRES(const std::string& matrix_path, double tol, int max_iter,
 		int restart_iter, int k) {
@@ -148,7 +221,8 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    run_sGMRES(matrix_path, tol, max_iter, restart_iter, k);
+    //run_sGMRES(matrix_path, tol, max_iter, restart_iter, k);
+    run_DQGMRES(matrix_path, tol, max_iter, restart_iter, k);
 
     return 0;
 }

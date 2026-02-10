@@ -43,5 +43,15 @@ void original_spmv(const MatrixCSR& mat, const double* v, Vector& r) {
         }
     }
 
+template <class Matrix, class Vector>
+void Update(Vector& x, int k, Matrix& h, const Vector& s, const Matrix &V) {
+    Vector y(s);
+
+    // Backsolve: 
+    cblas_dtrsm(CblasColMajor, CblasLeft, CblasUpper, CblasNoTrans, CblasNonUnit, k + 1, 1, 1., h.data(), n_rows(h), y.data(), k + 1);
+    
+    cblas_dgemv(CblasColMajor, CblasNoTrans, n_rows(V), k + 1, 1., V.data(), n_rows(V), y.data(), 1, 1., x.data(), 1);
+    
+}
 
 }

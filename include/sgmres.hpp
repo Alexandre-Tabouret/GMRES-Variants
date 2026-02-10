@@ -15,17 +15,6 @@ using namespace utils;
 
 // ========== Utilitary Functions ========== //
 
-template <class Matrix, class Vector>
-void Update(Vector& x, int k, Matrix& h, const Vector& s, const Matrix &V) {
-    Vector y(s);
-
-    // Backsolve: 
-    cblas_dtrsm(CblasColMajor, CblasLeft, CblasUpper, CblasNoTrans, CblasNonUnit, k + 1, 1, 1., h.data(), n_rows(h), y.data(), k + 1);    
-
-    cblas_dgemv(CblasColMajor, CblasNoTrans, n_rows(V), k + 1, 1., V.data(), n_rows(V), y.data(), 1, 1., x.data(), 1);
-    
-}
-
 template<class Matrix, class Vector>
 void back_substitution(const Matrix& R, const Vector& b, Vector& y, int n) {
     for (int i = n - 1; i >= 0; --i) {
@@ -62,8 +51,9 @@ int sGMRES(Operator& A, double normA, Vector& x, Vector& b, double normb, Precon
     r = b - A * tx;
     double beta = norm(r);
 
-    //double backward_error = beta / (normA * norm(tx) + normb);
-    double backward_error = beta / normb;
+    double backward_error = beta / (normA * norm(tx) + normb);
+    //double backward_error = beta / normb;
+    
     if (backward_error <= tol) {
 	tol = beta;
 	max_iter = 0;
@@ -150,8 +140,8 @@ int sGMRES(Operator& A, double normA, Vector& x, Vector& b, double normb, Precon
                 resid = norm(b - A * tx);
             }
 
-	    // backward_error = resid / (normA * norm(tx) + normb); // eta_{A,b}
-	    backward_error = resid / normb; // eta_{b}
+	    backward_error = resid / (normA * norm(tx) + normb); // eta_{A,b}
+	    //backward_error = resid / normb; // eta_{b}
 
 	    
 	    if (prev_resid < resid) {	
@@ -191,8 +181,8 @@ std::cout << j << " " << i << " " << backward_error << " (" << resid << " / " <<
     	beta = norm(r);
     	resid = beta;
 
-	// backward_error = resid / (normA * norm(tx) + normb); // eta_{A,b}
-        backward_error = resid / normb; // eta_{b}
+	backward_error = resid / (normA * norm(tx) + normb); // eta_{A,b}
+        //backward_error = resid / normb; // eta_{b}
 
     	if (backward_error < tol) {
 	    x = tx;
