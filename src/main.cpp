@@ -31,7 +31,14 @@ void run_sGMRES(const std::string& matrix_path, double tol, int max_iter,
     composyx::SparseMatrixCSR<double, int> A = utils::load_matrix<composyx::SparseMatrixCSR<double, int>>(matrix_path);
 
     // Initialize all data
+
+	// Preconditioenr
+    Precond_Jacobi<double, Vector, composyx::SparseMatrixCSR<double, int>> M(A);
+    //Precond_Identity<double, Vector, composyx::SparseMatrixCSR<double, int>> M(A);
+
+
     	// System vectors x_0, b
+/*
     int n = n_rows(A);
     Vector x(n), b(n);
     for (int k = 0; k < n; ++k) {
@@ -39,12 +46,20 @@ void run_sGMRES(const std::string& matrix_path, double tol, int max_iter,
         b(k) = 1.0;
     }
     b = A * b;    
+*/
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::normal_distribution<double> dist(0.0, 1.0);
+    int n = n_rows(A);
+    Vector x(n), b(n), y(n);
+    for (int k = 0; k < n; ++k) {
+        y(k) = dist(gen);
+	x(k) = 0;
+    }
+    b = A * y;
 	
     double normb = norm(b);
     double normA = approximate_mat_norm(A);
-
-	// Preconditioenr
-    Precond_Jacobi<double, Vector, composyx::SparseMatrixCSR<double, int>> M(A);
 
 	// Basis V
     composyx::DenseMatrix<double> V(n, restart_iter + 1); 

@@ -8,6 +8,7 @@
 #include "chrono_logger.hpp"
 
 #include <mkl_cblas.h>
+#include <mkl.h>
 
 using namespace std;
 using namespace utils;
@@ -51,7 +52,7 @@ int sGMRES(Operator& A, double normA, Vector& x, Vector& b, double normb, Precon
 	   int& max_iter, int& restart_iter, double& tol, const int& k) {
 
     // Initialization
-    double resid, h;
+    double resid, h, prev_resid;
     int i, j = 1; // Iterators
     int n = n_rows(A);
     int s = n_rows(S);
@@ -61,7 +62,8 @@ int sGMRES(Operator& A, double normA, Vector& x, Vector& b, double normb, Precon
     r = b - A * tx;
     double beta = norm(r);
 
-    double backward_error = beta / (normA * norm(tx) + normb);
+    //double backward_error = beta / (normA * norm(tx) + normb);
+    double backward_error = beta / normb;
     if (backward_error <= tol) {
 	tol = beta;
 	max_iter = 0;
@@ -69,6 +71,7 @@ int sGMRES(Operator& A, double normA, Vector& x, Vector& b, double normb, Precon
     }
 
     resid = beta;
+    prev_resid = resid;
 
     // Outer loop
     while (j <= max_iter) {
@@ -96,6 +99,8 @@ int sGMRES(Operator& A, double normA, Vector& x, Vector& b, double normb, Precon
 
 
 	    // k-truncated Arnoldi
+
+	    // MGS
 	    for (int iter = std::max(0, i - k); iter <= i; ++iter) {
 		h = cblas_ddot(n, w.data(), 1, V.data() + n * iter, 1);
 		cblas_daxpy(n, -h, V.data() + n * iter, 1, w.data(), 1);
@@ -103,6 +108,22 @@ int sGMRES(Operator& A, double normA, Vector& x, Vector& b, double normb, Precon
 	    h = norm(w);
 	    cblas_dcopy(n, w.data(), 1, V.data() + n * (i + 1), 1);
 	    cblas_dscal(n, 1.0 / h, V.data() + n * (i + 1), 1);
+
+/*
+	    // CGS2
+	    Vector h_vect(n);
+	    int start =  std::max(0, i - k);
+
+	    cblas_dgemv(CblasColMajor, CblasTrans, n, i - start + 1, 1.0, V.data() + n * start, n, w.data(), 1, 0.0, h_vect.data(), 1);
+	    cblas_dgemv(CblasColMajor, CblasNoTrans, n, i - start + 1, -1.0, V.data() + n * start, n, h_vect.data(), 1, 1.0, w.data(), 1);	
+
+            cblas_dgemv(CblasColMajor, CblasTrans, n, i - start + 1, 1.0, V.data() + n * start, n, w.data(), 1, 0.0, h_vect.data(), 1);
+            cblas_dgemv(CblasColMajor, CblasNoTrans, n, i - start + 1, -1.0, V.data() + n * start, n, h_vect.data(), 1, 1.0, w.data(), 1);
+
+            h = norm(w);
+            cblas_dcopy(n, w.data(), 1, V.data() + n * (i + 1), 1);
+            cblas_dscal(n, 1.0 / h, V.data() + n * (i + 1), 1);
+*/
 
 	    // QR factorization update
             for (int iter = 0; iter < i; ++iter) {
@@ -125,10 +146,33 @@ int sGMRES(Operator& A, double normA, Vector& x, Vector& b, double normb, Precon
                 cblas_dtrsm(CblasColMajor, CblasLeft, CblasUpper, CblasNoTrans, CblasNonUnit, i, 1, 1., R.data(), restart_iter + 1, y.data(), restart_iter + 1); 
                 cblas_dgemv(CblasColMajor, CblasNoTrans, n, i, 1.0, V.data(), n, y.data(), 1, 1.0, tx.data(), 1);
                 M.solve(tx, tx);
+		prev_resid = resid;
                 resid = norm(b - A * tx);
             }
 
-	    backward_error = resid / (normA * norm(tx) + normb);
+	    // backward_error = resid / (normA * norm(tx) + normb); // eta_{A,b}
+	    backward_error = resid / normb; // eta_{b}
+
+	    
+	    if (prev_resid < resid) {	
+		Matrix SVD(n, i, V.data());
+		SVD = A * SVD;
+		
+		double *S = (double*)malloc(i * sizeof(double));
+		double *work;
+    		int lwork = -1;
+		int info;
+		double wkopt;
+		dgesvd("N", "N", &n, &i, SVD.data(), &n, S, nullptr, &n, nullptr, &n, &wkopt, &lwork, &info);
+		lwork = (int)wkopt;
+   	 	work = (double*)malloc(lwork * sizeof(double));
+		dgesvd("N", "N", &n, &i, SVD.data(), &n, S, nullptr, &n, nullptr, &n, work, &lwork, &info);
+		std::cout << "kappa(A * V_k) = " << S[0] / S[i - 1] << std::endl;
+		free(S);
+		free(work);
+		return 1;
+	    }
+
 
 std::cout << j << " " << i << " " << backward_error << " (" << resid << " / " << resid_estimate <<")" << std::endl;
 	    if (backward_error < tol) {
@@ -146,7 +190,10 @@ std::cout << j << " " << i << " " << backward_error << " (" << resid << " / " <<
     	r = b - A * tx;
     	beta = norm(r);
     	resid = beta;
-    	backward_error = resid / (normA * norm(tx) + normb);
+
+	// backward_error = resid / (normA * norm(tx) + normb); // eta_{A,b}
+        backward_error = resid / normb; // eta_{b}
+
     	if (backward_error < tol) {
 	    x = tx;
 	    tol = resid;

@@ -13,6 +13,32 @@ public:
 
 };
 
+// Identity Preconditioner (none)
+template <typename real, class Vector, class Matrix>
+class Precond_Identity : public Abstract_Precond<real, Vector, Matrix> {
+
+public:
+    Precond_Identity(const Matrix& /*A*/) {}
+
+    Vector solve(const Vector& v) const override {
+        Vector r = Vector(v.size());
+        #pragma omp parallel for
+        for (std::size_t i = 0; i < v.size(); i++) {
+            r(i) = v(i);
+        }
+        return r;
+    }
+ 
+    void solve(const Vector& v, Vector& res) const override {
+        #pragma omp parallel for
+        for (std::size_t i = 0; i < v.size(); i++) {
+            res(i) = v(i);
+        }
+    }
+
+}; 
+
+
 // Jacobi Preconditioner (Vector that represents a diagonal)
 template <typename real, class Vector, class Matrix>
 class Precond_Jacobi : public Abstract_Precond<real, Vector, Matrix> {
