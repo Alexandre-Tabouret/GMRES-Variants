@@ -1,7 +1,7 @@
-# GMRES-Variant
-A few GMRES variant
+# GMRES-Variants
+A few GMRES variants
 
-This repository provides a prototype of different variant of GMRES in C++ using the Composyx library. In particular, it offers:
+This repository provides a prototype of different variants of GMRES in C++ using the Composyx library. In particular, it offers:
 - Sketched GMRES (sGMRES)
 - Direct Quasi-GMRES (DQGMRES)
 
@@ -10,7 +10,7 @@ Currently, are available:
 - Preconditioner
   - Identity
   - Jacobi
-- Sketching matrix
+- Sketching matrix (for sGMRES)
   - Subsampled Random Hadamar Transform (SRHT)
  
 ## How to run
