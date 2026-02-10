@@ -1,11 +1,14 @@
-# sGMRES
-Sketched GMRES (sGMRES) prototype
+# GMRES-Variant
+A few GMRES variant
 
-This repository provides a prototype of sGMRES in C++ using the Composyx library.
+This repository provides a prototype of different variant of GMRES in C++ using the Composyx library. In particular, it offers:
+- Sketched GMRES (sGMRES)
+- Direct Quasi-GMRES (DQGMRES)
 
 ## Content
 Currently, are available:
 - Preconditioner
+  - Identity
   - Jacobi
 - Sketching matrix
   - Subsampled Random Hadamar Transform (SRHT)
@@ -28,3 +31,5 @@ The argument `-h` will display available arguments for the program:
 ```
 
 The program loads matrices from `mtx` files and expect them to be sparse (You can pick them up from the [SuiteSparse Matrix Collection](https://sparse.tamu.edu/).
+
+In `src/main.cpp` one might want to change the function called by the `main` function in order to use the desired GMRES variant.
