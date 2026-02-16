@@ -37,7 +37,7 @@ Real abs(Real x) {
 
 template<class Operator, class Vector, class Matrix, class Sketch, class Preconditioner>
 int sGMRES(Operator& A, double normA, Vector& x, Vector& b, double normb, Preconditioner& M, Matrix& V, 
-	   Sketch& S, Matrix& W_S, Matrix& QR,
+	   Sketch& S, Matrix& Q, Matrix& R,
 	   int& max_iter, int& restart_iter, double& tol, const int& k) {
 
     // Initialization
@@ -45,8 +45,7 @@ int sGMRES(Operator& A, double normA, Vector& x, Vector& b, double normb, Precon
     int i, j = 1; // Iterators
     int n = n_rows(A);
     int s = n_rows(S);
-    Vector w(n), r(n), w_s(s), Sr_0(s), y(restart_iter), z(n), v(n), tx(n), QtSr_0(s), tau(restart_iter), py(restart_iter);
-    int* p = (int *) malloc(sizeof(int) * restart_iter);
+    Vector w(n), r(n), w_s(s), Sr_0(s), y(restart_iter), z(n), v(n), tx(n), QtSr_0(restart_iter);
     M.solve(x, tx);
 
     r = b - A * tx;
@@ -87,8 +86,6 @@ int sGMRES(Operator& A, double normA, Vector& x, Vector& b, double normb, Precon
 
 	    // Sketch the new vector
 	    S.sketch(w.data(), w_s);
-	    cblas_dcopy(s, w_s.data(), 1, W_S.data() + s * i, 1);
-	    cblas_dcopy(s * (i + 1), W_S.data(), 1, QR.data(), 1);
 
 
 	    // k-truncated Arnoldi
@@ -119,28 +116,25 @@ int sGMRES(Operator& A, double normA, Vector& x, Vector& b, double normb, Precon
 */
 
 	    // QR factorization update
-	    for (int iter = 0; iter < restart_iter; ++iter) {
-		p[iter] = 0;
-	    }
-	    LAPACKE_dgeqp3(LAPACK_COL_MAJOR, s, i+1, QR.data(), s, p, tau.data());
-
-
+            for (int iter = 0; iter < i; ++iter) {
+                R(iter, i) = cblas_ddot(s, w_s.data(), 1, Q.data() + s * iter, 1);
+                cblas_daxpy(s, -R(iter, i), Q.data() + s * iter, 1, w_s.data(), 1);
+            }
+            R(i, i) = norm(w_s);
+            cblas_dcopy(s, w_s.data(), 1, Q.data() + s * (i), 1);
+            cblas_dscal(s, 1.0 / R(i, i), Q.data() + s * (i), 1);
 
 	    // Compute the estimated residual
-	    cblas_dcopy(s, Sr_0.data(), 1, QtSr_0.data(), 1);
-	    LAPACKE_dormqr(LAPACK_COL_MAJOR, 'L', 'T', s, 1, i+1, QR.data(), s, tau.data(), QtSr_0.data(), s);
-            double norm_QtSr_0_squared = cblas_ddot(i+1, QtSr_0.data(), 1, QtSr_0.data(), 1);
+            QtSr_0(i) = cblas_ddot(s, Q.data() + s * (i), 1, Sr_0.data(), 1);
+            double norm_QtSr_0_squared = cblas_ddot(i + 1, QtSr_0.data(), 1, QtSr_0.data(), 1);
             double resid_estimate = std::sqrt(norm_Sr_0_squared - norm_QtSr_0_squared);
 
 	    // Update x for backward error
             if (1) {
                 tx = x;
                 cblas_dcopy(i+1, QtSr_0.data(), 1, y.data(), 1);
-                cblas_dtrsm(CblasColMajor, CblasLeft, CblasUpper, CblasNoTrans, CblasNonUnit, i+1, 1, 1., QR.data(), s, y.data(), i+1);
-		for (int iter = 0; iter < i + 1; ++iter) {
-    		    py(p[iter] - 1) = y(iter);
-		}
-                cblas_dgemv(CblasColMajor, CblasNoTrans, n, i+1, 1.0, V.data(), n, py.data(), 1, 1.0, tx.data(), 1);
+                cblas_dtrsm(CblasColMajor, CblasLeft, CblasUpper, CblasNoTrans, CblasNonUnit, i+1, 1, 1., R.data(), restart_iter + 1, y.data(), i+1); 
+                cblas_dgemv(CblasColMajor, CblasNoTrans, n, i+1, 1.0, V.data(), n, y.data(), 1, 1.0, tx.data(), 1);
                 M.solve(tx, tx);
 		prev_resid = resid;
                 resid = norm(b - A * tx);
@@ -175,28 +169,18 @@ std::cout << j << " " << i << " " << backward_error << " " << resid << " " << re
 		x = tx;
 		max_iter = j;
 		tol = resid;
-		free(p);
 		return 0;
 	    }
 
 	} // End for i
 
     	// Update before restart
-    	
-	cblas_dcopy(s, Sr_0.data(), 1, QtSr_0.data(), 1);
-	LAPACKE_dormqr(LAPACK_COL_MAJOR, 'L', 'T', s, 1, i, QR.data(), s, tau.data(), QtSr_0.data(), s);
-	cblas_dcopy(i, QtSr_0.data(), 1, y.data(), 1);
-	cblas_dtrsm(CblasColMajor, CblasLeft, CblasUpper, CblasNoTrans, CblasNonUnit, i, 1, 1., QR.data(), s, y.data(), i);
-	for (int iter = 0; iter < i; ++iter)
-    	    py(p[iter] - 1) = y(iter);
-	cblas_dgemv(CblasColMajor, CblasNoTrans, n, i, 1.0, V.data(), n, py.data(), 1, 1.0, x.data(), 1);
-	
-
+	cblas_dgemv(CblasColMajor, CblasNoTrans, n, i + 1, 1.0, V.data(), n, y.data(), 1, 1.0, x.data(), 1);
 	M.solve(x, tx);
     	r = b - A * tx;
     	beta = norm(r);
     	resid = beta;
-	
+
 	backward_error = resid / (normA * norm(tx) + normb); // eta_{A,b}
         //backward_error = resid / normb; // eta_{b}
 
@@ -204,8 +188,7 @@ std::cout << j << " " << i << " " << backward_error << " " << resid << " " << re
 	    x = tx;
 	    tol = resid;
             max_iter = j;
-            free(p);
-	    return 0;
+            return 0;
      	}
 
 
@@ -215,7 +198,6 @@ std::cout << j << " " << i << " " << backward_error << " " << resid << " " << re
     // No convergence
     M.solve(x, x);
     tol = resid;
-    free(p);
     return 1;
 }
 

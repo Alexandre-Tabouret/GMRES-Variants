@@ -45,8 +45,7 @@ int sGMRES(Operator& A, double normA, Vector& x, Vector& b, double normb, Precon
     int i, j = 1; // Iterators
     int n = n_rows(A);
     int s = n_rows(S);
-    Vector w(n), r(n), w_s(s), Sr_0(s), y(restart_iter), z(n), v(n), tx(n), QtSr_0(s), tau(restart_iter), py(restart_iter);
-    int* p = (int *) malloc(sizeof(int) * restart_iter);
+    Vector w(n), r(n), w_s(s), Sr_0(s), y(restart_iter), z(n), v(n), tx(n), QtSr_0(s), tau(restart_iter);
     M.solve(x, tx);
 
     r = b - A * tx;
@@ -119,10 +118,7 @@ int sGMRES(Operator& A, double normA, Vector& x, Vector& b, double normb, Precon
 */
 
 	    // QR factorization update
-	    for (int iter = 0; iter < restart_iter; ++iter) {
-		p[iter] = 0;
-	    }
-	    LAPACKE_dgeqp3(LAPACK_COL_MAJOR, s, i+1, QR.data(), s, p, tau.data());
+	    LAPACKE_dgeqrf(LAPACK_COL_MAJOR, s, i+1, QR.data(), s, tau.data());
 
 
 
@@ -137,10 +133,7 @@ int sGMRES(Operator& A, double normA, Vector& x, Vector& b, double normb, Precon
                 tx = x;
                 cblas_dcopy(i+1, QtSr_0.data(), 1, y.data(), 1);
                 cblas_dtrsm(CblasColMajor, CblasLeft, CblasUpper, CblasNoTrans, CblasNonUnit, i+1, 1, 1., QR.data(), s, y.data(), i+1);
-		for (int iter = 0; iter < i + 1; ++iter) {
-    		    py(p[iter] - 1) = y(iter);
-		}
-                cblas_dgemv(CblasColMajor, CblasNoTrans, n, i+1, 1.0, V.data(), n, py.data(), 1, 1.0, tx.data(), 1);
+                cblas_dgemv(CblasColMajor, CblasNoTrans, n, i+1, 1.0, V.data(), n, y.data(), 1, 1.0, tx.data(), 1);
                 M.solve(tx, tx);
 		prev_resid = resid;
                 resid = norm(b - A * tx);
@@ -175,7 +168,6 @@ std::cout << j << " " << i << " " << backward_error << " " << resid << " " << re
 		x = tx;
 		max_iter = j;
 		tol = resid;
-		free(p);
 		return 0;
 	    }
 
@@ -187,9 +179,7 @@ std::cout << j << " " << i << " " << backward_error << " " << resid << " " << re
 	LAPACKE_dormqr(LAPACK_COL_MAJOR, 'L', 'T', s, 1, i, QR.data(), s, tau.data(), QtSr_0.data(), s);
 	cblas_dcopy(i, QtSr_0.data(), 1, y.data(), 1);
 	cblas_dtrsm(CblasColMajor, CblasLeft, CblasUpper, CblasNoTrans, CblasNonUnit, i, 1, 1., QR.data(), s, y.data(), i);
-	for (int iter = 0; iter < i; ++iter)
-    	    py(p[iter] - 1) = y(iter);
-	cblas_dgemv(CblasColMajor, CblasNoTrans, n, i, 1.0, V.data(), n, py.data(), 1, 1.0, x.data(), 1);
+	cblas_dgemv(CblasColMajor, CblasNoTrans, n, i, 1.0, V.data(), n, y.data(), 1, 1.0, x.data(), 1);
 	
 
 	M.solve(x, tx);
@@ -204,7 +194,6 @@ std::cout << j << " " << i << " " << backward_error << " " << resid << " " << re
 	    x = tx;
 	    tol = resid;
             max_iter = j;
-            free(p);
 	    return 0;
      	}
 
@@ -215,7 +204,6 @@ std::cout << j << " " << i << " " << backward_error << " " << resid << " " << re
     // No convergence
     M.solve(x, x);
     tol = resid;
-    free(p);
     return 1;
 }
 

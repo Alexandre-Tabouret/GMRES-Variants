@@ -8,6 +8,7 @@
 #include <string>
 #include <random>
 
+//#include "_sgmres_gsQR.hpp"
 #include "sgmres.hpp"
 #include "dqgmres.hpp"
 #include "utils.hpp"
@@ -49,7 +50,8 @@ void run_DQGMRES(const std::string& matrix_path, double tol, int max_iter,
     b = A * b;    
 */
     std::random_device rd;
-    std::mt19937 gen(rd());
+    //std::mt19937 gen(rd());
+    std::mt19937 gen(42);
     std::normal_distribution<double> dist(0.0, 1.0);
     int n = n_rows(A);
     Vector x(n), b(n), y(n);
@@ -106,8 +108,8 @@ void run_sGMRES(const std::string& matrix_path, double tol, int max_iter,
     // Initialize all data
 
 	// Preconditioenr
-    Precond_Jacobi<double, Vector, composyx::SparseMatrixCSR<double, int>> M(A);
-    //Precond_Identity<double, Vector, composyx::SparseMatrixCSR<double, int>> M(A);
+    //Precond_Jacobi<double, Vector, composyx::SparseMatrixCSR<double, int>> M(A);
+    Precond_Identity<double, Vector, composyx::SparseMatrixCSR<double, int>> M(A);
 
 
     	// System vectors x_0, b
@@ -121,7 +123,8 @@ void run_sGMRES(const std::string& matrix_path, double tol, int max_iter,
     b = A * b;    
 */
     std::random_device rd;
-    std::mt19937 gen(rd());
+    //std::mt19937 gen(rd());
+    std::mt19937 gen(42);
     std::normal_distribution<double> dist(0.0, 1.0);
     int n = n_rows(A);
     Vector x(n), b(n), y(n);
@@ -152,12 +155,15 @@ void run_sGMRES(const std::string& matrix_path, double tol, int max_iter,
 */
     SRHT<Vector> S(sketch_size, n);
 
-    composyx::DenseMatrix<double> Q(sketch_size, restart_iter + 1);
-    composyx::DenseMatrix<double> R(restart_iter + 1, restart_iter + 1);
-    
+    //composyx::DenseMatrix<double> Q(sketch_size, restart_iter + 1);
+    //composyx::DenseMatrix<double> R(restart_iter + 1, restart_iter + 1);
+    composyx::DenseMatrix<double> W_S(sketch_size, restart_iter);
+    composyx::DenseMatrix<double> QR(sketch_size, restart_iter);
+   
     // Run sGMRES
     auto start = std::chrono::high_resolution_clock::now();
-    int i = sGMRES(A, normA, x, b, normb, M, V, S, Q, R, max_iter, restart_iter, tol, k);
+    //int i = sGMRES(A, normA, x, b, normb, M, V, S, Q, R, max_iter, restart_iter, tol, k);
+    int i = sGMRES(A, normA, x, b, normb, M, V, S, W_S, QR, max_iter, restart_iter, tol, k);
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> elapsed = end - start;
     
@@ -221,8 +227,8 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    //run_sGMRES(matrix_path, tol, max_iter, restart_iter, k);
-    run_DQGMRES(matrix_path, tol, max_iter, restart_iter, k);
+    run_sGMRES(matrix_path, tol, max_iter, restart_iter, k);
+    //run_DQGMRES(matrix_path, tol, max_iter, restart_iter, k);
 
     return 0;
 }
