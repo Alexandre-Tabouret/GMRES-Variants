@@ -149,27 +149,6 @@ int sGMRES(Operator& A, double normA, Vector& x, Vector& b, double normb, Precon
 	    backward_error = resid / (normA * norm(tx) + normb); // eta_{A,b}
 	    //backward_error = resid / normb; // eta_{b}
 
-/*	    
-	    if (prev_resid < resid) {	
-		Matrix SVD(n, i, V.data());
-		SVD = A * SVD;
-		
-		double *S = (double*)malloc(i * sizeof(double));
-		double *work;
-    		int lwork = -1;
-		int info;
-		double wkopt;
-		dgesvd("N", "N", &n, &i, SVD.data(), &n, S, nullptr, &n, nullptr, &n, &wkopt, &lwork, &info);
-		lwork = (int)wkopt;
-   	 	work = (double*)malloc(lwork * sizeof(double));
-		dgesvd("N", "N", &n, &i, SVD.data(), &n, S, nullptr, &n, nullptr, &n, work, &lwork, &info);
-		std::cout << "kappa(A * V_k) = " << S[0] / S[i - 1] << std::endl;
-		free(S);
-		free(work);
-		return 1;
-	    }
-*/
-
 std::cout << j << " " << i << " " << backward_error << " " << resid << " " << resid_estimate << std::endl;
 	    if (backward_error < tol) {
 		x = tx;

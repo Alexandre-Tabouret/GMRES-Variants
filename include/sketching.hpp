@@ -13,6 +13,8 @@ public:
 
     virtual void sketch(const double* v, Vector& res) = 0;
 
+    virtual void sketch(const double* v, double* res) = 0;
+
     friend std::size_t n_rows(const SketchingMatrix& S) {
         return S._s;
     }
@@ -49,8 +51,7 @@ public:
 
 	_work = Vector(n);
     }
-    
-    void sketch(const double* v, Vector& res) {
+     void sketch(const double* v, Vector& res) {
 
 	// Apply E
 	#pragma omp parallel for
@@ -68,6 +69,26 @@ public:
 
     }
 
+    void sketch(const double* v, double* res) {
+
+	// Apply E
+	#pragma omp parallel for
+        for (std::size_t i = 0; i < this->_n; ++i)
+	    _work(i) = _E(i) * v[i];
+
+	// Apply H
+	this->apply_hadamard();
+
+	// Apply D and scaling
+	double scale = std::sqrt(static_cast<double>(this->_n / this->_s));
+	#pragma omp parallel for
+	for (std::size_t i = 0; i < this->_s; ++i)
+            res[i] = scale * _work((std::size_t) _D(i));	
+
+    }
+
+
+   
 private:
     Vector _E;
     Vector _D;

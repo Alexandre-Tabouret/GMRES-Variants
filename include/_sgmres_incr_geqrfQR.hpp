@@ -37,11 +37,11 @@ Real abs(Real x) {
 
 template<class Operator, class Vector, class Matrix, class Sketch, class Preconditioner>
 int sGMRES(Operator& A, double normA, Vector& x, Vector& b, double normb, Preconditioner& M, Matrix& V, 
-	   Sketch& S, Matrix& W_S, Matrix& QR,
+	   Sketch& S, Matrix& QR,
 	   int& max_iter, int& restart_iter, double& tol, const int& k) {
 
     // Initialization
-    double resid, h, prev_resid;
+    double resid, h;
     int i, j = 1; // Iterators
     int n = n_rows(A);
     int s = n_rows(S);
@@ -61,7 +61,6 @@ int sGMRES(Operator& A, double normA, Vector& x, Vector& b, double normb, Precon
     }
 
     resid = beta;
-    prev_resid = resid;
 
     // Outer loop
     while (j <= max_iter) {
@@ -85,14 +84,9 @@ int sGMRES(Operator& A, double normA, Vector& x, Vector& b, double normb, Precon
 	    w = A * z;
 
 	    // Sketch the new vector
-	    S.sketch(w.data(), w_s);
-	    cblas_dcopy(s, w_s.data(), 1, W_S.data() + s * i, 1);
-	    cblas_dcopy(s * (i + 1), W_S.data(), 1, QR.data(), 1);
+	    S.sketch(w.data(), QR.data() + s * i);
 
-
-	    // k-truncated Arnoldi
-
-	    // MGS
+	    // k-truncated Arnoldi (MGS)
 	    for (int iter = std::max(0, i - k); iter <= i; ++iter) {
 		h = cblas_ddot(n, w.data(), 1, V.data() + n * iter, 1);
 		cblas_daxpy(n, -h, V.data() + n * iter, 1, w.data(), 1);
@@ -102,23 +96,28 @@ int sGMRES(Operator& A, double normA, Vector& x, Vector& b, double normb, Precon
 	    cblas_dscal(n, 1.0 / h, V.data() + n * (i + 1), 1);
 
 	    // QR factorization update
-	    LAPACKE_dgeqrf(LAPACK_COL_MAJOR, s, i+1, QR.data(), s, tau.data());
-
+	    if (i == 0) {
+	        LAPACKE_dgeqrf(LAPACK_COL_MAJOR, s, 1, QR.data(), s, tau.data());
+	    } else {
+		LAPACKE_dormqr(LAPACK_COL_MAJOR, 'L', 'T', s, 1, i, QR.data(), s, tau.data(), QR.data() + s * i, s);
+		LAPACKE_dlarfg(s - i, QR.data() + s * i + i, QR.data() + s * i + i + 1, 1, tau.data() + i);
+	    }
+	
 	    // Compute the estimated residual
 	    cblas_dcopy(s, Sr_0.data(), 1, QtSr_0.data(), 1);
 	    LAPACKE_dormqr(LAPACK_COL_MAJOR, 'L', 'T', s, 1, i+1, QR.data(), s, tau.data(), QtSr_0.data(), s);
-            //double norm_QtSr_0_squared = cblas_ddot(i+1, QtSr_0.data(), 1, QtSr_0.data(), 1);
-            //double resid_estimate = std::sqrt(norm_Sr_0_squared - norm_QtSr_0_squared);
-	    double resid_estimate = std::sqrt(cblas_ddot(s - (i + 1), QtSr_0.data() + i + 1, 1, QtSr_0.data() + i + 1, 1));
+            double norm_QtSr_0_squared = cblas_ddot(s, QtSr_0.data(), 1, QtSr_0.data(), 1);
+            double resid_estimate = std::sqrt(norm_Sr_0_squared - norm_QtSr_0_squared);
+            //double resid_estimate = std::sqrt(cblas_ddot(s - (i + 1), QtSr_0.data() + i + 1, 1, QtSr_0.data() + i + 1, 1));
 
 	    // Update x for backward error
-            if (1) {
+	    if (i%10 == 0) {
+            //if (1) {
                 tx = x;
                 cblas_dcopy(i+1, QtSr_0.data(), 1, y.data(), 1);
                 cblas_dtrsm(CblasColMajor, CblasLeft, CblasUpper, CblasNoTrans, CblasNonUnit, i+1, 1, 1., QR.data(), s, y.data(), i+1);
                 cblas_dgemv(CblasColMajor, CblasNoTrans, n, i+1, 1.0, V.data(), n, y.data(), 1, 1.0, tx.data(), 1);
                 M.solve(tx, tx);
-		prev_resid = resid;
                 resid = norm(b - A * tx);
             }
 
@@ -135,8 +134,7 @@ std::cout << j << " " << i << " " << backward_error << " " << resid << " " << re
 
 	} // End for i
 
-    	// Update before restart
-    	
+    	// Update before restart    	
 	cblas_dcopy(s, Sr_0.data(), 1, QtSr_0.data(), 1);
 	LAPACKE_dormqr(LAPACK_COL_MAJOR, 'L', 'T', s, 1, i, QR.data(), s, tau.data(), QtSr_0.data(), s);
 	cblas_dcopy(i, QtSr_0.data(), 1, y.data(), 1);

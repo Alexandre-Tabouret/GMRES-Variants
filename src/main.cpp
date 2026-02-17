@@ -8,8 +8,9 @@
 #include <string>
 #include <random>
 
-//#include "_sgmres_gsQR.hpp"
-#include "sgmres.hpp"
+//#include "_sgmres_geqrfQR.hpp"
+#include "_sgmres_incr_geqrfQR.hpp"
+//#include "sgmres.hpp"
 #include "dqgmres.hpp"
 #include "utils.hpp"
 #include "sketching.hpp"
@@ -157,13 +158,13 @@ void run_sGMRES(const std::string& matrix_path, double tol, int max_iter,
 
     //composyx::DenseMatrix<double> Q(sketch_size, restart_iter + 1);
     //composyx::DenseMatrix<double> R(restart_iter + 1, restart_iter + 1);
-    composyx::DenseMatrix<double> W_S(sketch_size, restart_iter);
+    //composyx::DenseMatrix<double> W_S(sketch_size, restart_iter);
     composyx::DenseMatrix<double> QR(sketch_size, restart_iter);
    
     // Run sGMRES
     auto start = std::chrono::high_resolution_clock::now();
     //int i = sGMRES(A, normA, x, b, normb, M, V, S, Q, R, max_iter, restart_iter, tol, k);
-    int i = sGMRES(A, normA, x, b, normb, M, V, S, W_S, QR, max_iter, restart_iter, tol, k);
+    int i = sGMRES(A, normA, x, b, normb, M, V, S, QR, max_iter, restart_iter, tol, k);
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> elapsed = end - start;
     
