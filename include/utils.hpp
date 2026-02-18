@@ -24,8 +24,9 @@ template <class Vector> typename Vector::value_type norm(const Vector &v) {
 }
 
 
-template<class MatrixCSR, class Vector>
-void original_spmv(const MatrixCSR& mat, const double* v, Vector& r) {
+// SpMV: assume both vectors v and r are contiguous in memory
+template<class MatrixCSR>
+void original_spmv(const MatrixCSR& mat, const double* v, double* res) {
 	std::size_t n = n_rows(mat);
 	const int* i_ptr = mat.get_i_ptr();
 	const int* j_ptr = mat.get_j_ptr();
@@ -39,7 +40,7 @@ void original_spmv(const MatrixCSR& mat, const double* v, Vector& r) {
                	sum += v_ptr[k] * v[j_ptr[k]];
             }
 
-            r(i) = sum;
+            res[i] = sum;
         }
     }
 

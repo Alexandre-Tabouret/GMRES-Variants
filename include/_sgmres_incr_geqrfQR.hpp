@@ -45,14 +45,14 @@ int sGMRES(Operator& A, double normA, Vector& x, Vector& b, double normb, Precon
     int i, j = 1; // Iterators
     int n = n_rows(A);
     int s = n_rows(S);
-    Vector w(n), r(n), w_s(s), Sr_0(s), y(restart_iter), z(n), v(n), tx(n), QtSr_0(s), tau(restart_iter);
+    Vector w(n), r(n), w_s(s), Sr_0(s), y(restart_iter), z(n), tx(n), QtSr_0(s), tau(restart_iter);
     M.solve(x, tx);
 
-    r = b - A * tx;
+    original_spmv(A, tx.data(), r.data());
+    r = b - r;
     double beta = norm(r);
 
     double backward_error = beta / (normA * norm(tx) + normb);
-    //double backward_error = beta / normb;
     
     if (backward_error <= tol) {
 	tol = beta;
@@ -70,18 +70,17 @@ int sGMRES(Operator& A, double normA, Vector& x, Vector& b, double normb, Precon
 	
 	// Initialize g = S * r_0
 	S.sketch(r.data(), Sr_0);
-	double norm_Sr_0_squared = norm(Sr_0);
-	norm_Sr_0_squared *= norm_Sr_0_squared;
+	//double norm_Sr_0_squared = norm(Sr_0);
+	//norm_Sr_0_squared *= norm_Sr_0_squared;
 
 	// Inner loop
 	for (i = 0; i < restart_iter && j <= max_iter; ++i, ++j) {
 
 	    // Apply Preconditioner
-	    cblas_dcopy(n, V.data() + n * i, 1, v.data(), 1);
-	    M.solve(v, z);
+	    M.solve(n, V.data() + n * i, z.data());
 
 	    // SpMV
-	    w = A * z;
+	    original_spmv(A, z.data(), w.data()); // w = A * z
 
 	    // Sketch the new vector
 	    S.sketch(w.data(), QR.data() + s * i);
@@ -106,25 +105,24 @@ int sGMRES(Operator& A, double normA, Vector& x, Vector& b, double normb, Precon
 	    // Compute the estimated residual
 	    cblas_dcopy(s, Sr_0.data(), 1, QtSr_0.data(), 1);
 	    LAPACKE_dormqr(LAPACK_COL_MAJOR, 'L', 'T', s, 1, i+1, QR.data(), s, tau.data(), QtSr_0.data(), s);
-            double norm_QtSr_0_squared = cblas_ddot(s, QtSr_0.data(), 1, QtSr_0.data(), 1);
-            double resid_estimate = std::sqrt(norm_Sr_0_squared - norm_QtSr_0_squared);
+            //double norm_QtSr_0_squared = cblas_ddot(i+1, QtSr_0.data(), 1, QtSr_0.data(), 1);
+            //double resid_estimate = std::sqrt(norm_Sr_0_squared - norm_QtSr_0_squared);
             //double resid_estimate = std::sqrt(cblas_ddot(s - (i + 1), QtSr_0.data() + i + 1, 1, QtSr_0.data() + i + 1, 1));
 
 	    // Update x for backward error
-	    if (i%10 == 0) {
-            //if (1) {
+	    //if (i%10 == 0) {
+            if (1) {
                 tx = x;
-                cblas_dcopy(i+1, QtSr_0.data(), 1, y.data(), 1);
-                cblas_dtrsm(CblasColMajor, CblasLeft, CblasUpper, CblasNoTrans, CblasNonUnit, i+1, 1, 1., QR.data(), s, y.data(), i+1);
-                cblas_dgemv(CblasColMajor, CblasNoTrans, n, i+1, 1.0, V.data(), n, y.data(), 1, 1.0, tx.data(), 1);
+                cblas_dtrsm(CblasColMajor, CblasLeft, CblasUpper, CblasNoTrans, CblasNonUnit, i+1, 1, 1., QR.data(), s, QtSr_0.data(), i+1); // y = QtSr_0(0:i+1)
+                cblas_dgemv(CblasColMajor, CblasNoTrans, n, i+1, 1.0, V.data(), n, QtSr_0.data(), 1, 1.0, tx.data(), 1);
                 M.solve(tx, tx);
-                resid = norm(b - A * tx);
+		original_spmv(A, tx.data(), r.data());
+                resid = norm(b - r);
             }
 
 	    backward_error = resid / (normA * norm(tx) + normb); // eta_{A,b}
-	    //backward_error = resid / normb; // eta_{b}
 
-std::cout << j << " " << i << " " << backward_error << " " << resid << " " << resid_estimate << std::endl;
+std::cout << j << " " << i << " " << backward_error << " " << resid << std::endl;
 	    if (backward_error < tol) {
 		x = tx;
 		max_iter = j;
@@ -137,18 +135,17 @@ std::cout << j << " " << i << " " << backward_error << " " << resid << " " << re
     	// Update before restart    	
 	cblas_dcopy(s, Sr_0.data(), 1, QtSr_0.data(), 1);
 	LAPACKE_dormqr(LAPACK_COL_MAJOR, 'L', 'T', s, 1, i, QR.data(), s, tau.data(), QtSr_0.data(), s);
-	cblas_dcopy(i, QtSr_0.data(), 1, y.data(), 1);
-	cblas_dtrsm(CblasColMajor, CblasLeft, CblasUpper, CblasNoTrans, CblasNonUnit, i, 1, 1., QR.data(), s, y.data(), i);
-	cblas_dgemv(CblasColMajor, CblasNoTrans, n, i, 1.0, V.data(), n, y.data(), 1, 1.0, x.data(), 1);
+	cblas_dtrsm(CblasColMajor, CblasLeft, CblasUpper, CblasNoTrans, CblasNonUnit, i, 1, 1., QR.data(), s, QtSr_0.data(), i);
+	cblas_dgemv(CblasColMajor, CblasNoTrans, n, i, 1.0, V.data(), n, QtSr_0.data(), 1, 1.0, x.data(), 1);
 	
 
 	M.solve(x, tx);
-    	r = b - A * tx;
+	original_spmv(A, tx.data(), r.data());
+    	r = b - r;
     	beta = norm(r);
     	resid = beta;
 	
 	backward_error = resid / (normA * norm(tx) + normb); // eta_{A,b}
-        //backward_error = resid / normb; // eta_{b}
 
     	if (backward_error < tol) {
 	    x = tx;
@@ -162,13 +159,10 @@ std::cout << j << " " << i << " " << backward_error << " " << resid << " " << re
     } // End while j
 
     // No convergence
+
     M.solve(x, x);
     tol = resid;
     return 1;
 }
-
-
-
-
 
 

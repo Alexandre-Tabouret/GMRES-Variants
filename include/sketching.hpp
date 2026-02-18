@@ -35,16 +35,28 @@ class SRHT: public SketchingMatrix<Vector> {
 public:
     SRHT(const std::size_t s, const std::size_t n): SketchingMatrix<Vector>(s, n) {
 	_E = Vector(n);
-	#pragma omp parallel for
-        for (std::size_t i = 0; i < n; ++i)
-	    _E(i) = (rand() & 1) ? 1 : -1;
+	
+	#pragma omp parallel
+	{
+	    //std::random_device rd;
+	    //std::mt19937 gen(rd());
+	    //int tid = omp_get_thread_num();
+    	    std::mt19937 gen(42);
+	    std::uniform_int_distribution<int> dist(0, 1);
+	
+	    #pragma omp for
+            for (std::size_t i = 0; i < n; ++i)
+	    	_E(i) = dist(gen) ? 1 : -1;
+	}
 
 	_D = Vector(s);
 	std::random_device rd;
-	std::mt19937 rng(rd());
+	//std::mt19937 rng(rd());
+	std::mt19937 rng(42);
 	std::vector<int> perm(n);
 	std::iota(perm.begin(), perm.end(), 0);
 	std::shuffle(perm.begin(), perm.end(), rng);
+	
 	#pragma omp parallel for
 	for (std::size_t i = 0; i < s; ++i)
 	    _D(i) = perm[i];

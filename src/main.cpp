@@ -109,8 +109,8 @@ void run_sGMRES(const std::string& matrix_path, double tol, int max_iter,
     // Initialize all data
 
 	// Preconditioenr
-    //Precond_Jacobi<double, Vector, composyx::SparseMatrixCSR<double, int>> M(A);
-    Precond_Identity<double, Vector, composyx::SparseMatrixCSR<double, int>> M(A);
+    Precond_Jacobi<double, Vector, composyx::SparseMatrixCSR<double, int>> M(A);
+    //Precond_Identity<double, Vector, composyx::SparseMatrixCSR<double, int>> M(A);
 
 
     	// System vectors x_0, b
@@ -165,6 +165,7 @@ void run_sGMRES(const std::string& matrix_path, double tol, int max_iter,
     auto start = std::chrono::high_resolution_clock::now();
     //int i = sGMRES(A, normA, x, b, normb, M, V, S, Q, R, max_iter, restart_iter, tol, k);
     int i = sGMRES(A, normA, x, b, normb, M, V, S, QR, max_iter, restart_iter, tol, k);
+    //int i = sGMRES(A, normA, x, b, normb, M, V, S, W_S, QR, max_iter, restart_iter, tol, k);
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> elapsed = end - start;
     

@@ -70,10 +70,13 @@ int sGMRES(Operator& A, double normA, Vector& x, Vector& b, double normb, Precon
 	cblas_dcopy(n, r.data(), 1, V.data(), 1);
         cblas_dscal(n, 1.0 / beta, V.data(), 1);
 	
+	QR *= 0;
+	tau *= 0;	
+
 	// Initialize g = S * r_0
 	S.sketch(r.data(), Sr_0);
-	double norm_Sr_0_squared = norm(Sr_0);
-	norm_Sr_0_squared *= norm_Sr_0_squared;
+	//double norm_Sr_0_squared = norm(Sr_0);
+	//norm_Sr_0_squared *= norm_Sr_0_squared;
 
 	// Inner loop
 	for (i = 0; i < restart_iter && j <= max_iter; ++i, ++j) {
@@ -99,6 +102,7 @@ int sGMRES(Operator& A, double normA, Vector& x, Vector& b, double normb, Precon
 		cblas_daxpy(n, -h, V.data() + n * iter, 1, w.data(), 1);
 	    }
 	    h = norm(w);
+
 	    cblas_dcopy(n, w.data(), 1, V.data() + n * (i + 1), 1);
 	    cblas_dscal(n, 1.0 / h, V.data() + n * (i + 1), 1);
 
@@ -129,8 +133,8 @@ int sGMRES(Operator& A, double normA, Vector& x, Vector& b, double normb, Precon
 	    // Compute the estimated residual
 	    cblas_dcopy(s, Sr_0.data(), 1, QtSr_0.data(), 1);
 	    LAPACKE_dormqr(LAPACK_COL_MAJOR, 'L', 'T', s, 1, i+1, QR.data(), s, tau.data(), QtSr_0.data(), s);
-            double norm_QtSr_0_squared = cblas_ddot(i+1, QtSr_0.data(), 1, QtSr_0.data(), 1);
-            double resid_estimate = std::sqrt(norm_Sr_0_squared - norm_QtSr_0_squared);
+            //double norm_QtSr_0_squared = cblas_ddot(i+1, QtSr_0.data(), 1, QtSr_0.data(), 1);
+            //double resid_estimate = std::sqrt(norm_Sr_0_squared - norm_QtSr_0_squared);
 
 	    // Update x for backward error
             if (1) {
@@ -149,7 +153,7 @@ int sGMRES(Operator& A, double normA, Vector& x, Vector& b, double normb, Precon
 	    backward_error = resid / (normA * norm(tx) + normb); // eta_{A,b}
 	    //backward_error = resid / normb; // eta_{b}
 
-std::cout << j << " " << i << " " << backward_error << " " << resid << " " << resid_estimate << std::endl;
+//std::cout << j << " " << i << " " << backward_error << " " << resid << " " << resid_estimate << std::endl;
 	    if (backward_error < tol) {
 		x = tx;
 		max_iter = j;

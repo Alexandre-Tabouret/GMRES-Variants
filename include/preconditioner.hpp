@@ -9,6 +9,7 @@ class Abstract_Precond {
 public:
     virtual Vector solve(const Vector& v) const = 0;
     virtual void solve(const Vector& v, Vector& res) const = 0;
+    virtual void solve(const size_t size, const double* v, double* res) const = 0;
     virtual ~Abstract_Precond() = default;
 
 };
@@ -33,6 +34,13 @@ public:
         #pragma omp parallel for
         for (std::size_t i = 0; i < v.size(); i++) {
             res(i) = v(i);
+        }
+    }
+
+    void solve(const size_t size, const double* v, double* res) const override {
+        #pragma omp parallel for
+        for (std::size_t i = 0; i < size; i++) {
+            res[i] = v[i];
         }
     }
 
@@ -84,6 +92,13 @@ public:
         }
     }
 
+    void solve(const size_t size, const double* v, double* res) const override {
+	assert(this->p.size() == size);
+        #pragma omp parallel for
+        for (std::size_t i = 0; i < this->p.size(); i++) {
+            res[i] = v[i] * p(i);
+        }
+    }
 
     const real& operator()(size_t i) const {
         if (i < this->p.size()) { // i being a size_t, it is necessary >= 0 so dont need to check

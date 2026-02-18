@@ -109,7 +109,7 @@ int sGMRES(Operator& A, double normA, Vector& x, Vector& b, double normb, Precon
 	    LAPACKE_dormqr(LAPACK_COL_MAJOR, 'L', 'T', s, 1, i+1, QR.data(), s, tau.data(), QtSr_0.data(), s);
             //double norm_QtSr_0_squared = cblas_ddot(i+1, QtSr_0.data(), 1, QtSr_0.data(), 1);
             //double resid_estimate = std::sqrt(norm_Sr_0_squared - norm_QtSr_0_squared);
-	    double resid_estimate = std::sqrt(cblas_ddot(s - (i + 1), QtSr_0.data() + i + 1, 1, QtSr_0.data() + i + 1, 1));
+	    //double resid_estimate = std::sqrt(cblas_ddot(s - (i + 1), QtSr_0.data() + i + 1, 1, QtSr_0.data() + i + 1, 1));
 
 	    // Update x for backward error
             if (1) {
@@ -125,7 +125,7 @@ int sGMRES(Operator& A, double normA, Vector& x, Vector& b, double normb, Precon
 	    backward_error = resid / (normA * norm(tx) + normb); // eta_{A,b}
 	    //backward_error = resid / normb; // eta_{b}
 
-std::cout << j << " " << i << " " << backward_error << " " << resid << " " << resid_estimate << std::endl;
+//std::cout << j << " " << i << " " << backward_error << " " << resid << " " << resid_estimate << std::endl;
 	    if (backward_error < tol) {
 		x = tx;
 		max_iter = j;
