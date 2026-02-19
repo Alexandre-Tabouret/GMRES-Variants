@@ -41,7 +41,7 @@ void run_DQGMRES(const std::string& matrix_path, double tol, int max_iter,
 
 
     	// System vectors x_0, b
-/*
+
     int n = n_rows(A);
     Vector x(n), b(n);
     for (int k = 0; k < n; ++k) {
@@ -49,7 +49,8 @@ void run_DQGMRES(const std::string& matrix_path, double tol, int max_iter,
         b(k) = 1.0;
     }
     b = A * b;    
-*/
+
+/*  
     std::random_device rd;
     //std::mt19937 gen(rd());
     std::mt19937 gen(42);
@@ -61,7 +62,7 @@ void run_DQGMRES(const std::string& matrix_path, double tol, int max_iter,
 	x(k) = 0;
     }
     b = A * y;
-	
+*/	
     double normb = norm(b);
     double normA = approximate_mat_norm(A);
 
@@ -87,6 +88,7 @@ void run_DQGMRES(const std::string& matrix_path, double tol, int max_iter,
     double backward_error = norm(b - A * x) / (normA * norm(x) + normb);
     std::cout << "||b - A * x|| / (||A||||x|| + ||b||): " << backward_error << std::endl;   
     std::cout << "Time for operation: " << elapsed.count() << " seconds\n";
+
 }
 
 
@@ -114,7 +116,7 @@ void run_sGMRES(const std::string& matrix_path, double tol, int max_iter,
 
 
     	// System vectors x_0, b
-/*
+
     int n = n_rows(A);
     Vector x(n), b(n);
     for (int k = 0; k < n; ++k) {
@@ -122,7 +124,7 @@ void run_sGMRES(const std::string& matrix_path, double tol, int max_iter,
         b(k) = 1.0;
     }
     b = A * b;    
-*/
+/*
     std::random_device rd;
     //std::mt19937 gen(rd());
     std::mt19937 gen(42);
@@ -134,7 +136,7 @@ void run_sGMRES(const std::string& matrix_path, double tol, int max_iter,
 	x(k) = 0;
     }
     b = A * y;
-	
+*/	
     double normb = norm(b);
     double normA = approximate_mat_norm(A);
 
@@ -143,17 +145,7 @@ void run_sGMRES(const std::string& matrix_path, double tol, int max_iter,
 
 	// Sketch S, and QR factorization Q, R
     int sketch_size = 2 * (restart_iter + 1);
-/*
-    composyx::DenseMatrix<double> S(sketch_size, n);
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_real_distribution<double> dist(-1.0, 1.0);
-    for (int i = 0; i < sketch_size; ++i) {
-    	for (int j = 0; j < n; ++j) {
-            S(i, j) = dist(gen);
-    	}
-    }
-*/
+
     SRHT<Vector> S(sketch_size, n);
 
     //composyx::DenseMatrix<double> Q(sketch_size, restart_iter + 1);
@@ -229,8 +221,8 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    run_sGMRES(matrix_path, tol, max_iter, restart_iter, k);
-    //run_DQGMRES(matrix_path, tol, max_iter, restart_iter, k);
+    //run_sGMRES(matrix_path, tol, max_iter, restart_iter, k);
+    run_DQGMRES(matrix_path, tol, max_iter, restart_iter, k);
 
     return 0;
 }

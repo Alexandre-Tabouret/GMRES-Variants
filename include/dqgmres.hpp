@@ -54,16 +54,16 @@ int DQGMRES(Operator& A, double normA, Vector& x, Vector& b, double normb, Preco
 	int& max_iter, int& restart_iter, double& tol, const int& k) {
 
     // Initialization
-    double resid, prev_resid;
+    double resid;
     int i, j = 1; // Iterators
-    int count = 0;
     int n = n_rows(A);
 
     Vector w(n), r(n), tx(n), z(n), cs(restart_iter + 1), sn(restart_iter + 1), g(restart_iter + 1);
 
     //M.solve(x, tx);
+    original_spmv(A, x.data(), r.data());
+    r = b - r;
 
-    r = b - A * x;
     double beta = norm(r);
     
     double backward_error = beta / (normA * norm(x) + normb);
@@ -75,7 +75,6 @@ int DQGMRES(Operator& A, double normA, Vector& x, Vector& b, double normb, Preco
     }
 
     resid = beta;
-    prev_resid = resid;
 
     while (j <= max_iter) {
 	// Initialize V
@@ -83,17 +82,15 @@ int DQGMRES(Operator& A, double normA, Vector& x, Vector& b, double normb, Preco
         cblas_dscal(n, 1.0 / beta, V.data(), 1);
 	g *= 0;
 	g(0) = beta;
-	count = 0;	
 
         // Inner loop
 	for (i = 0; i < restart_iter && j <= max_iter; ++i, ++j) {
 
 	    // Apply Preconditioner
-	    cblas_dcopy(n, V.data() + n * i, 1, z.data(), 1);
-	    M.solve(z, z);
+	    M.solve(n, V.data() + n * i, z.data());
 
 	    // SpMV
-	    w = A * z;
+	    original_spmv(A, z.data(), w.data());
 
 	    // k-truncated Arnoldi
 	    for (int iter = std::max(0, i - k); iter <= i; ++iter) {
@@ -123,34 +120,12 @@ int DQGMRES(Operator& A, double normA, Vector& x, Vector& b, double normb, Preco
 	    cblas_daxpy(n, g(i), P.data() + n * i, 1, x.data(), 1);
 
 	   // Stopping criterion
-	   prev_resid = resid;
-	   resid = norm(b - A * x);
+	   original_spmv(A, x.data(), r.data());
+	   resid = norm(b - r);
 	   backward_error = resid /(normb + norm(x) * normA);
 	
-/*
-	    if (std::abs(prev_resid - resid) / resid < 0.0001) {
-		count++;
-	    }
-	    if (count >= 50) {	
-		Matrix SVD(n, i + 1, V.data());
-		
-		double *S = (double*)malloc(i * sizeof(double));
-		double *work;
-    		int lwork = -1;
-		int info;
-		double wkopt;
-		dgesvd("N", "N", &n, &i, SVD.data(), &n, S, nullptr, &n, nullptr, &n, &wkopt, &lwork, &info);
-		lwork = (int)wkopt;
-   	 	work = (double*)malloc(lwork * sizeof(double));
-		dgesvd("N", "N", &n, &i, SVD.data(), &n, S, nullptr, &n, nullptr, &n, work, &lwork, &info);
-		std::cout << "kappa(V_{k+1}) = " << S[0] / S[i - 1] << std::endl;
-		free(S);
-		free(work);
-		return 1;
-	    }
-*/
 	
-	   std::cout << j << " " << i << " " << backward_error << " " << resid << std::endl;
+	   //std::cout << j << " " << i << " " << backward_error << " " << resid << std::endl;
 	
 	   if (backward_error < tol) {
 		max_iter = j;
@@ -160,7 +135,8 @@ int DQGMRES(Operator& A, double normA, Vector& x, Vector& b, double normb, Preco
 	 
 	} // End for i
 	
-	r = b - A * x;
+	original_spmv(A, x.data(), r.data());
+	r = b - r;
     	beta = norm(r);
     	resid = beta;
 	

@@ -118,6 +118,7 @@ private:
     	}
 
 	for (size_t len = 1; len < N; len <<= 1) {
+	     #pragma omp parallel for schedule(static)
    	     for (size_t i = 0; i < N; i += (len << 1)) {
         	    for (size_t j = 0; j < len; ++j) {
                 	double u = tmp[i + j];

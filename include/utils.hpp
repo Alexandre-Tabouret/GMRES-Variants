@@ -13,7 +13,7 @@ template<class MatrixCSR>
 MatrixCSR load_matrix(const std::string file_name) {
     MatrixCSR A;
     A.from_matrix_market_file(file_name);
-
+    A.fill_half_to_full_storage();
     return A;
 }
 

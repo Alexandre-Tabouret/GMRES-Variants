@@ -111,7 +111,7 @@ int sGMRES(Operator& A, double normA, Vector& x, Vector& b, double normb, Precon
 
 	    // Update x for backward error
 	    //if (i%10 == 0) {
-            if (1) {
+            if (10) {
                 tx = x;
                 cblas_dtrsm(CblasColMajor, CblasLeft, CblasUpper, CblasNoTrans, CblasNonUnit, i+1, 1, 1., QR.data(), s, QtSr_0.data(), i+1); // y = QtSr_0(0:i+1)
                 cblas_dgemv(CblasColMajor, CblasNoTrans, n, i+1, 1.0, V.data(), n, QtSr_0.data(), 1, 1.0, tx.data(), 1);
@@ -122,7 +122,7 @@ int sGMRES(Operator& A, double normA, Vector& x, Vector& b, double normb, Precon
 
 	    backward_error = resid / (normA * norm(tx) + normb); // eta_{A,b}
 
-std::cout << j << " " << i << " " << backward_error << " " << resid << std::endl;
+//std::cout << j << " " << i << " " << backward_error << " " << resid << std::endl;
 	    if (backward_error < tol) {
 		x = tx;
 		max_iter = j;
