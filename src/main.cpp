@@ -15,11 +15,17 @@
 #include "utils.hpp"
 #include "sketching.hpp"
 #include "preconditioner.hpp"
+#include "logger.hpp"
 #include <composyx.hpp>
 #include <composyx/linalg/MatrixNorm.hpp>
 
+namespace fs = std::filesystem;
+
 void run_DQGMRES(const std::string& matrix_path, double tol, int max_iter,
-		int restart_iter, int k) {
+		int restart_iter, int k, const std::string& log_dir) {
+
+    // Set up logger
+    Logger logger(log_dir + "/log_chrono.csv");
 
     // If no restart, set restart_iter = max_iter
     if (restart_iter <= 0) {
@@ -41,7 +47,6 @@ void run_DQGMRES(const std::string& matrix_path, double tol, int max_iter,
 
 
     	// System vectors x_0, b
-
     int n = n_rows(A);
     Vector x(n), b(n);
     for (int k = 0; k < n; ++k) {
@@ -50,7 +55,7 @@ void run_DQGMRES(const std::string& matrix_path, double tol, int max_iter,
     }
     b = A * b;    
 
-/*  
+/*
     std::random_device rd;
     //std::mt19937 gen(rd());
     std::mt19937 gen(42);
@@ -73,7 +78,7 @@ void run_DQGMRES(const std::string& matrix_path, double tol, int max_iter,
 
     // Run sGMRES
     auto start = std::chrono::high_resolution_clock::now();
-    int i = DQGMRES(A, normA, x, b, normb, M, V, H, P, max_iter, restart_iter, tol, k);
+    int i = DQGMRES(A, normA, x, b, normb, M, V, H, P, max_iter, restart_iter, tol, k, logger);
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> elapsed = end - start;
     
@@ -94,13 +99,16 @@ void run_DQGMRES(const std::string& matrix_path, double tol, int max_iter,
 
 
 void run_sGMRES(const std::string& matrix_path, double tol, int max_iter,
-		int restart_iter, int k) {
+		int restart_iter, int k, const std::string& log_dir) {
 
     // If no restart, set restart_iter = max_iter
     if (restart_iter <= 0) {
 	restart_iter = max_iter;
     } 
 
+    // Set up logger
+    Logger logger(log_dir + "/log_chrono.csv");
+	
     // Set up nickname
     typedef composyx::DenseMatrix<double, 1> Vector;
 
@@ -156,7 +164,7 @@ void run_sGMRES(const std::string& matrix_path, double tol, int max_iter,
     // Run sGMRES
     auto start = std::chrono::high_resolution_clock::now();
     //int i = sGMRES(A, normA, x, b, normb, M, V, S, Q, R, max_iter, restart_iter, tol, k);
-    int i = sGMRES(A, normA, x, b, normb, M, V, S, QR, max_iter, restart_iter, tol, k);
+    int i = sGMRES(A, normA, x, b, normb, M, V, S, QR, max_iter, restart_iter, tol, k, logger);
     //int i = sGMRES(A, normA, x, b, normb, M, V, S, W_S, QR, max_iter, restart_iter, tol, k);
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> elapsed = end - start;
@@ -172,6 +180,7 @@ void run_sGMRES(const std::string& matrix_path, double tol, int max_iter,
     double backward_error = norm(b - A * x) / (normA * norm(x) + normb);
     std::cout << "||b - A * x|| / (||A||||x|| + ||b||): " << backward_error << std::endl;   
     std::cout << "Time for operation: " << elapsed.count() << " seconds\n";
+
 }
 
 
@@ -198,6 +207,7 @@ int main(int argc, char* argv[]) {
     int max_iter = 1500;
     int restart_iter = 0;
     int k = 4;
+    std::string log_dir = "./logs";
     
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
@@ -211,6 +221,8 @@ int main(int argc, char* argv[]) {
             restart_iter = std::stoi(argv[++i]);
 	else if ((arg == "-k") && i + 1 < argc)
             k = std::stoi(argv[++i]);
+	else if ((arg == "--log_name" || arg == "-ln") && i + 1 < argc)
+            {log_dir = std::string(argv[++i]);}
 	else if (arg == "--help" || arg == "-h") {
             print_help();
 	    return 0;
@@ -221,8 +233,10 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    //run_sGMRES(matrix_path, tol, max_iter, restart_iter, k);
-    run_DQGMRES(matrix_path, tol, max_iter, restart_iter, k);
+    fs::create_directories(log_dir);
+
+    //run_sGMRES(matrix_path, tol, max_iter, restart_iter, k, log_dir);
+    run_DQGMRES(matrix_path, tol, max_iter, restart_iter, k, log_dir);
 
     return 0;
 }

@@ -49,9 +49,11 @@ void ApplyPlaneRotation(Real& dx, Real& dy, Real& cs, Real& sn) {
 
 // ========== DQGMRES ========== //
 
-template<class Operator, class Vector, class Matrix, class Preconditioner>
+template<class Operator, class Vector, class Matrix, class Preconditioner, class Logger>
 int DQGMRES(Operator& A, double normA, Vector& x, Vector& b, double normb, Preconditioner& M, Matrix& V, Matrix& H, Matrix& P,
-	int& max_iter, int& restart_iter, double& tol, const int& k) {
+	int& max_iter, int& restart_iter, double& tol, const int& k, Logger& logger) {
+
+    Chrono_logger chrono_logger;
 
     // Initialization
     double resid;
@@ -86,11 +88,18 @@ int DQGMRES(Operator& A, double normA, Vector& x, Vector& b, double normb, Preco
         // Inner loop
 	for (i = 0; i < restart_iter && j <= max_iter; ++i, ++j) {
 
+	    chrono_logger.checkpoint(); // 0
+	    double sketching_time = chrono_logger.checkpoint(); // 1
+
 	    // Apply Preconditioner
 	    M.solve(n, V.data() + n * i, z.data());
 
+	    double precond_time = chrono_logger.checkpoint(); // 2
+
 	    // SpMV
 	    original_spmv(A, z.data(), w.data());
+
+	    double spmv_time = chrono_logger.checkpoint(); // 3
 
 	    // k-truncated Arnoldi
 	    for (int iter = std::max(0, i - k); iter <= i; ++iter) {
@@ -101,6 +110,8 @@ int DQGMRES(Operator& A, double normA, Vector& x, Vector& b, double normb, Preco
 	    cblas_dcopy(n, w.data(), 1, V.data() + n * (i + 1), 1);
 	    cblas_dscal(n, 1.0 / H(i + 1, i), V.data() + n * (i + 1), 1);
 
+	    double ortho_time = chrono_logger.checkpoint(); // 4
+
 	    // Rotation
 	    for (int iter = std::max(0, i - k); iter < i; ++iter) {
     		ApplyPlaneRotation(H(iter, i), H(iter+1, i), cs(iter), sn(iter));
@@ -110,6 +121,8 @@ int DQGMRES(Operator& A, double normA, Vector& x, Vector& b, double normb, Preco
 
 	    ApplyPlaneRotation(g(i), g(i + 1), cs(i), sn(i));
 
+	    double facto_time = chrono_logger.checkpoint(); // 5
+
 	    // Update x_k
 	    cblas_dcopy(n, z.data(), 1, P.data() + n * i, 1); // P_m = V_m
 	    for (int iter = std::max(0, i - k); iter < i; ++iter) {
@@ -118,19 +131,35 @@ int DQGMRES(Operator& A, double normA, Vector& x, Vector& b, double normb, Preco
 	    cblas_dscal(n, 1.0 / H(i, i), P.data() + n * i, 1);
 	
 	    cblas_daxpy(n, g(i), P.data() + n * i, 1, x.data(), 1);
+	
+	    double update_time = chrono_logger.checkpoint(); // 6
 
 	   // Stopping criterion
-	   original_spmv(A, x.data(), r.data());
-	   resid = norm(b - r);
-	   backward_error = resid /(normb + norm(x) * normA);
+	   //original_spmv(A, x.data(), r.data());
+	   //resid = norm(b - r);
+	   //backward_error = resid /(normb + norm(x) * normA);
 	
-	
-	   //std::cout << j << " " << i << " " << backward_error << " " << resid << std::endl;
+	   double resid_est = std::sqrt(std::max(i - k, 0) + 1) * std::abs(g(i+1));
+	   backward_error = resid_est /(normb + norm(x) * normA);
+
+	   double be_time = chrono_logger.checkpoint(); // 0
+	   auto math_time = chrono_logger.get_duration(0, 7);
+           chrono_logger.clear();
+           logger.log_chrono(j, math_time, sketching_time, precond_time, spmv_time, ortho_time, facto_time, update_time, be_time);
+
+	   //std::cout << j << " " << i << " " << backward_error << " " << resid << " " << resid_est << std::endl;
 	
 	   if (backward_error < tol) {
-		max_iter = j;
-		tol = resid;
-		return 0;
+		// Check if it truly converged
+		original_spmv(A, x.data(), r.data());
+           	resid = norm(b - r);
+		backward_error = resid /(normb + norm(x) * normA);
+		
+		if (backward_error < tol) {
+		    max_iter = j;
+		    tol = resid;
+		    return 0;
+		}
 	   }
 	 
 	} // End for i

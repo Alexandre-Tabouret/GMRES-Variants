@@ -35,10 +35,12 @@ Real abs(Real x) {
 
 // ========== sGMRES ========== //
 
-template<class Operator, class Vector, class Matrix, class Sketch, class Preconditioner>
+template<class Operator, class Vector, class Matrix, class Sketch, class Preconditioner, class Logger>
 int sGMRES(Operator& A, double normA, Vector& x, Vector& b, double normb, Preconditioner& M, Matrix& V, 
 	   Sketch& S, Matrix& QR,
-	   int& max_iter, int& restart_iter, double& tol, const int& k) {
+	   int& max_iter, int& restart_iter, double& tol, const int& k, Logger &logger) {
+
+    Chrono_logger chrono_logger;
 
     // Initialization
     double resid, h;
@@ -76,14 +78,22 @@ int sGMRES(Operator& A, double normA, Vector& x, Vector& b, double normb, Precon
 	// Inner loop
 	for (i = 0; i < restart_iter && j <= max_iter; ++i, ++j) {
 
+	    chrono_logger.checkpoint(); // 0
+
 	    // Apply Preconditioner
 	    M.solve(n, V.data() + n * i, z.data());
+
+	    auto precond_time = chrono_logger.checkpoint(); // 1
 
 	    // SpMV
 	    original_spmv(A, z.data(), w.data()); // w = A * z
 
+	    auto spmv_time = chrono_logger.checkpoint(); // 2
+
 	    // Sketch the new vector
 	    S.sketch(w.data(), QR.data() + s * i);
+
+	    auto sketching_time = chrono_logger.checkpoint(); // 3
 
 	    // k-truncated Arnoldi (MGS)
 	    for (int iter = std::max(0, i - k); iter <= i; ++iter) {
@@ -94,6 +104,8 @@ int sGMRES(Operator& A, double normA, Vector& x, Vector& b, double normb, Precon
 	    cblas_dcopy(n, w.data(), 1, V.data() + n * (i + 1), 1);
 	    cblas_dscal(n, 1.0 / h, V.data() + n * (i + 1), 1);
 
+	    auto ortho_time = chrono_logger.checkpoint(); // 4
+
 	    // QR factorization update
 	    if (i == 0) {
 	        LAPACKE_dgeqrf(LAPACK_COL_MAJOR, s, 1, QR.data(), s, tau.data());
@@ -102,6 +114,8 @@ int sGMRES(Operator& A, double normA, Vector& x, Vector& b, double normb, Precon
 		LAPACKE_dlarfg(s - i, QR.data() + s * i + i, QR.data() + s * i + i + 1, 1, tau.data() + i);
 	    }
 	
+	    auto facto_time = chrono_logger.checkpoint(); // 5
+
 	    // Compute the estimated residual
 	    cblas_dcopy(s, Sr_0.data(), 1, QtSr_0.data(), 1);
 	    LAPACKE_dormqr(LAPACK_COL_MAJOR, 'L', 'T', s, 1, i+1, QR.data(), s, tau.data(), QtSr_0.data(), s);
@@ -110,8 +124,8 @@ int sGMRES(Operator& A, double normA, Vector& x, Vector& b, double normb, Precon
             //double resid_estimate = std::sqrt(cblas_ddot(s - (i + 1), QtSr_0.data() + i + 1, 1, QtSr_0.data() + i + 1, 1));
 
 	    // Update x for backward error
-	    //if (i%10 == 0) {
-            if (10) {
+	    if (i%20 == 0) {
+            //if (10) {
                 tx = x;
                 cblas_dtrsm(CblasColMajor, CblasLeft, CblasUpper, CblasNoTrans, CblasNonUnit, i+1, 1, 1., QR.data(), s, QtSr_0.data(), i+1); // y = QtSr_0(0:i+1)
                 cblas_dgemv(CblasColMajor, CblasNoTrans, n, i+1, 1.0, V.data(), n, QtSr_0.data(), 1, 1.0, tx.data(), 1);
@@ -120,7 +134,14 @@ int sGMRES(Operator& A, double normA, Vector& x, Vector& b, double normb, Precon
                 resid = norm(b - r);
             }
 
+	    auto update_time = chrono_logger.checkpoint(); // 6
+
 	    backward_error = resid / (normA * norm(tx) + normb); // eta_{A,b}
+
+	    auto be_time = chrono_logger.checkpoint(); // 7
+	    auto math_time = chrono_logger.get_duration(0, 7);	
+	    chrono_logger.clear();
+	    logger.log_chrono(j, math_time, sketching_time, precond_time, spmv_time, ortho_time, facto_time, update_time, be_time);
 
 //std::cout << j << " " << i << " " << backward_error << " " << resid << std::endl;
 	    if (backward_error < tol) {
