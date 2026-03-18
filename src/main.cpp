@@ -25,7 +25,7 @@ void run_DQGMRES(const std::string& matrix_path, double tol, int max_iter,
 		int restart_iter, int k, const std::string& log_dir) {
 
     // Set up logger
-    Logger logger(log_dir + "/log_chrono.csv");
+    Logger logger(log_dir + "/log_chrono.csv", log_dir + "/log_config.csv");
 
     // If no restart, set restart_iter = max_iter
     if (restart_iter <= 0) {
@@ -94,6 +94,8 @@ void run_DQGMRES(const std::string& matrix_path, double tol, int max_iter,
     std::cout << "||b - A * x|| / (||A||||x|| + ||b||): " << backward_error << std::endl;   
     std::cout << "Time for operation: " << elapsed.count() << " seconds\n";
 
+    logger.log_config(matrix_path, k, restart_iter, backward_error, max_iter, elapsed.count());
+
 }
 
 
@@ -107,7 +109,7 @@ void run_sGMRES(const std::string& matrix_path, double tol, int max_iter,
     } 
 
     // Set up logger
-    Logger logger(log_dir + "/log_chrono.csv");
+    Logger logger(log_dir + "/log_chrono.csv", log_dir + "/log_config.csv");
 	
     // Set up nickname
     typedef composyx::DenseMatrix<double, 1> Vector;
@@ -181,6 +183,8 @@ void run_sGMRES(const std::string& matrix_path, double tol, int max_iter,
     std::cout << "||b - A * x|| / (||A||||x|| + ||b||): " << backward_error << std::endl;   
     std::cout << "Time for operation: " << elapsed.count() << " seconds\n";
 
+    logger.log_config(matrix_path, k, restart_iter, backward_error, max_iter, elapsed.count());
+
 }
 
 
@@ -235,8 +239,8 @@ int main(int argc, char* argv[]) {
 
     fs::create_directories(log_dir);
 
-    //run_sGMRES(matrix_path, tol, max_iter, restart_iter, k, log_dir);
-    run_DQGMRES(matrix_path, tol, max_iter, restart_iter, k, log_dir);
+    run_sGMRES(matrix_path, tol, max_iter, restart_iter, k, log_dir);
+    //run_DQGMRES(matrix_path, tol, max_iter, restart_iter, k, log_dir);
 
     return 0;
 }

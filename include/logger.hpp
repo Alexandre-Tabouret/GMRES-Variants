@@ -23,12 +23,19 @@ struct ChronoEntry {
 class Logger {
 public:
     // Constructor
-    Logger(string file_chro) {
+    Logger(string file_chro, string file_conf) {
 	file_chrono.open(file_chro, std::ofstream::out | std::ofstream::trunc);
         if (!file_chrono) {
             std::cerr << "Error: Could not open or create log file: " << file_chro << std::endl;
         }
 	file_chrono << "Iteration Math Sketch Precond SpMV Ortho Facto Update BE" << std::endl;
+
+	file_config.open(file_conf, std::ofstream::out | std::ofstream::trunc);
+        if (!file_config) {
+            std::cerr << "Error: Could not open or create log file: " << file_conf << std::endl;
+        }
+        file_config << "Matrix_file k restart Backward_error Max_iteration Duration" << std::endl;
+
     }
 
     // Destructor
@@ -37,12 +44,20 @@ public:
 	if (file_chrono.is_open()) {
 	    file_chrono.close();
 	}
+
+	if (file_config.is_open()) {
+	    file_config.close();
+	}
     }
 
     void log_chrono(const int iteration, const double math, const double sketching, const double precond,
 	const double spmv, const double ortho, const double facto, const double update, const double be) {
     	chrono_log.push_back({iteration, math, sketching, precond, spmv, ortho, facto, update, be});
     } 
+
+    void log_config(std::string matrix, const int k, const int restart, const double be, const int iter, const double elapsed) {
+	file_config << matrix << " " << k << " " << restart << " " << be << " " << iter << " " << elapsed << std::endl;
+    }
    
 
     void flush() {
@@ -52,6 +67,7 @@ public:
 
 private:
     std::ofstream file_chrono;
+    std::ofstream file_config;
     std::vector<ChronoEntry> chrono_log;
 
     void write_chrono() {
