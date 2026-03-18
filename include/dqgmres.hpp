@@ -91,13 +91,13 @@ int DQGMRES(Operator& A, double normA, Vector& x, Vector& b, double normb, Preco
 	    chrono_logger.checkpoint(); // 0
 	    double sketching_time = chrono_logger.checkpoint(); // 1
 
-	    // Apply Preconditioner
-	    M.solve(n, V.data() + n * i, z.data());
+	    // Apply Preconditioner z_i = M^-1 * v_i
+	    M.solve(n, V.data() + n * i, P.data() + n * i); // Directly store the result in p_i as it will need it in its update
 
 	    double precond_time = chrono_logger.checkpoint(); // 2
 
 	    // SpMV
-	    original_spmv(A, z.data(), w.data());
+	    original_spmv(A, P.data() + n * i, w.data());
 
 	    double spmv_time = chrono_logger.checkpoint(); // 3
 
@@ -124,7 +124,7 @@ int DQGMRES(Operator& A, double normA, Vector& x, Vector& b, double normb, Preco
 	    double facto_time = chrono_logger.checkpoint(); // 5
 
 	    // Update x_k
-	    cblas_dcopy(n, z.data(), 1, P.data() + n * i, 1); // P_m = V_m
+	    //cblas_dcopy(n, z.data(), 1, P.data() + n * i, 1); // P_i = M^-1 V_i --> already stored in it.
 	    for (int iter = std::max(0, i - k); iter < i; ++iter) {
 		cblas_daxpy(n, -H(iter, i), P.data() + n * iter, 1, P.data() + n * i, 1);
 	    }
@@ -142,7 +142,7 @@ int DQGMRES(Operator& A, double normA, Vector& x, Vector& b, double normb, Preco
 	   double resid_est = std::sqrt(std::max(i - k, 0) + 1) * std::abs(g(i+1));
 	   backward_error = resid_est /(normb + norm(x) * normA);
 
-	   double be_time = chrono_logger.checkpoint(); // 0
+	   double be_time = chrono_logger.checkpoint(); // 7
 	   auto math_time = chrono_logger.get_duration(0, 7);
            chrono_logger.clear();
            logger.log_chrono(j, math_time, sketching_time, precond_time, spmv_time, ortho_time, facto_time, update_time, be_time);
