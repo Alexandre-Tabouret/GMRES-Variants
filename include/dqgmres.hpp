@@ -61,6 +61,7 @@ int DQGMRES(Operator& A, double normA, Vector& x, Vector& b, double normb, Preco
     int n = n_rows(A);
 
     Vector w(n), r(n), tx(n), z(n), cs(restart_iter + 1), sn(restart_iter + 1), g(restart_iter + 1);
+    Vector H_delta(n); // For CGS2
 
     //M.solve(x, tx);
     original_spmv(A, x.data(), r.data());
@@ -102,13 +103,32 @@ int DQGMRES(Operator& A, double normA, Vector& x, Vector& b, double normb, Preco
 	    double spmv_time = chrono_logger.checkpoint(); // 3
 
 	    // k-truncated Arnoldi
-	    for (int iter = std::max(0, i - k); iter <= i; ++iter) {
+	    
+	    for (int iter = std::max(0, i - k + 1); iter <= i; ++iter) {
 		H(iter, i) = cblas_ddot(n, w.data(), 1, V.data() + n * iter, 1);
 		cblas_daxpy(n, -H(iter, i), V.data() + n * iter, 1, w.data(), 1);
 	    }
 	    H(i + 1, i) = norm(w);
 	    cblas_dcopy(n, w.data(), 1, V.data() + n * (i + 1), 1);
 	    cblas_dscal(n, 1.0 / H(i + 1, i), V.data() + n * (i + 1), 1);
+ 
+/*
+	    int start = std::max(0, i - k + 1); // truncated range (last k vectors)
+	    int ki = i - start + 1;             // number of vectors in the truncated window
+
+	    cblas_dgemv(CblasColMajor, CblasTrans, n, ki, 1.0, V.data() + start * n, n, w.data(), 1, 0.0, H.get_vect_view(i).data() + start, 1);
+	    cblas_dgemv(CblasColMajor, CblasNoTrans, n, ki, -1.0, V.data() + start * n, n, H.get_vect_view(i).data() + start, 1, 1.0, w.data(), 1);
+	    
+	    cblas_dgemv(CblasColMajor, CblasTrans, n, ki, 1.0, V.data() + start * n, n, w.data(), 1, 0.0, H_delta.data(), 1);
+	    cblas_dgemv(CblasColMajor, CblasNoTrans, n, ki, -1.0, V.data() + start * n, n, H_delta.data(), 1, 1.0, w.data(), 1);
+
+	    #pragma omp parallel for
+	    for (int j = 0; j < ki; ++j)
+	        H(start + j, i) += H_delta[j];
+	    H(i + 1, i) = norm(w);
+	    cblas_dcopy(n, w.data(), 1, V.data() + (i + 1) * n, 1);
+	    cblas_dscal(n, 1.0 / H(i + 1, i), V.data() + (i + 1) * n, 1);
+*/
 
 	    double ortho_time = chrono_logger.checkpoint(); // 4
 
@@ -147,8 +167,6 @@ int DQGMRES(Operator& A, double normA, Vector& x, Vector& b, double normb, Preco
            chrono_logger.clear();
            logger.log_chrono(j, math_time, sketching_time, precond_time, spmv_time, ortho_time, facto_time, update_time, be_time);
 
-	   //std::cout << j << " " << i << " " << backward_error << " " << resid << " " << resid_est << std::endl;
-	
 	   if (backward_error < tol) {
 		// Check if it truly converged
 		original_spmv(A, x.data(), r.data());

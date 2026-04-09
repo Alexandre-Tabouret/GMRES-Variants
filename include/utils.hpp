@@ -17,6 +17,7 @@ MatrixCSR load_matrix(const std::string file_name) {
     return A;
 }
 
+
 template <class Real> Real sqrt(const Real &v) { return Real(std::sqrt(v)); }
 
 template <class Vector> typename Vector::value_type norm(const Vector &v) {
