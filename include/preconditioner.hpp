@@ -63,7 +63,7 @@ public:
         for (std::size_t i = 0; i < n_rows(A); i++) {
 	    try {
 		a = A(i, i);
-	    } catch (const std::invalid_argument& e) {
+	    } catch (...) {
           	a = 0;
             }
             if (a == 0) {
