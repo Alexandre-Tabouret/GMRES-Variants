@@ -155,6 +155,7 @@ void run_sGMRES(const std::string& matrix_path, double tol, int max_iter,
     int sketch_size = 2 * (restart_iter + 1);
 
     SRHT<Vector> S(sketch_size, n);
+    //SparseSign<Vector> S(sketch_size, n, 8);
     //SDCT<Vector> S(sketch_size, n);
     //Gaussian<Vector, composyx::DenseMatrix<double>> S(sketch_size, n);
 
@@ -199,6 +200,8 @@ Options:
   -i, --max_iter <int>          	Maximum number of GMRES iterations [default: 1500]
   -ri, --restart-iter <int>		Number of iterations between restarts, no restart if 0 [default: 0]
   -k, 					k-truncated Arnoldi process parameter [default: 4]
+  -s, --seed <uint>			Seed for random system generation [default: random]
+  -ln, --log_name <str>			Directory for output logs [default: ./logs/]
   -h, --help                		Show this help message and exit
 )";
 }
@@ -243,8 +246,8 @@ int main(int argc, char* argv[]) {
 
     fs::create_directories(log_dir);
 
-    //run_sGMRES(matrix_path, tol, max_iter, restart_iter, k, log_dir, seed);
-    run_DQGMRES(matrix_path, tol, max_iter, restart_iter, k, log_dir, seed);
+    run_sGMRES(matrix_path, tol, max_iter, restart_iter, k, log_dir, seed);
+    //run_DQGMRES(matrix_path, tol, max_iter, restart_iter, k, log_dir, seed);
 
     return 0;
 }
